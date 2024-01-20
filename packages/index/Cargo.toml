@@ -1,0 +1,14 @@
+[package]
+name = "leptos-ezgst"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Eazy global state management for leptos."
+readme = "../../README.md"
+keywords = ["leptos", "state", "global", "di", "dependency-injection"]
+
+[dependencies]
+leptos-ezgst-macros.workspace = true
+leptos-ezgst-core.workspace = true

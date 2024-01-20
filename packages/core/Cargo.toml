@@ -1,0 +1,21 @@
+cargo-features = ["per-package-target"]
+
+[package]
+name = "leptos-ezgst-core"
+# default-target = "wasm32-unknown-unknown"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core functionalities for leptos-ezgst."
+
+[dependencies]
+portaldi = { version = "0.2.10" }
+serde = { version = "1.0", features = ["derive", "rc"] }
+serde_json = "1.0.96"
+async-trait = "0.1.68"
+leptos = { version = "0.5.1", features = ["nightly"] }   #TODO
+
+[features]
+default = []
