@@ -1,1 +1,2 @@
-pub use leptos_ezgst_core::*;
+pub use leptos_ezs_core::*;
+pub use leptos_ezs_macros::*;

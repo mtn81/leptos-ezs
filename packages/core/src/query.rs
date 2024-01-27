@@ -115,12 +115,16 @@ impl<Q: Query> ResourceW<Q> {
     }
 }
 
-pub trait QueryState: Clone + Copy + Sized + 'static {
-    type Env: Query;
+pub trait QueryFetcherModifier<Q: Query> {
+    fn modify_fetcher(&self, fetcher: QueryFetcher<Q>) -> QueryFetcher<Q> {
+        fetcher
+    }
+}
 
-    fn new(env: Shared<Self::Env>) -> Self;
+pub trait UseQuery<Q: Query>: QueryFetcherModifier<Q> + Clone + Copy + Sized + 'static {
+    fn new(env: Shared<Q>) -> Self;
 
-    fn provide(env: Shared<Self::Env>) -> Self {
+    fn provide(env: Shared<Q>) -> Self {
         let s = Self::new(env);
         provide_context(s);
         s
@@ -130,23 +134,19 @@ pub trait QueryState: Clone + Copy + Sized + 'static {
         expect_context()
     }
 
-    fn inner(&self) -> &UseQuery<Self::Env>;
+    fn inner(&self) -> &QueryWrapper<Q>;
 
-    fn fetcher(&self) -> QueryFetcher<Self::Env> {
-        self.configure_fetcher(self.inner().create_fetcher())
-    }
-
-    fn configure_fetcher(&self, b: QueryFetcher<Self::Env>) -> QueryFetcher<Self::Env> {
-        b
+    fn fetcher(&self) -> QueryFetcher<Q> {
+        self.modify_fetcher(self.inner().create_fetcher())
     }
 }
 
 #[derive(Clone)]
-pub struct UseQuery<Q: Query>(StoredValue<Shared<Q>>);
+pub struct QueryWrapper<Q: Query>(StoredValue<Shared<Q>>);
 
-impl<Q: Query> Copy for UseQuery<Q> {}
+impl<Q: Query> Copy for QueryWrapper<Q> {}
 
-impl<Q: Query> UseQuery<Q> {
+impl<Q: Query> QueryWrapper<Q> {
     pub fn new(query: Shared<Q>) -> Self {
         Self(store_value(query))
     }
@@ -154,3 +154,4 @@ impl<Q: Query> UseQuery<Q> {
         QueryFetcher::new(self.0.get_value())
     }
 }
+

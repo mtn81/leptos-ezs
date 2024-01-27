@@ -5,7 +5,7 @@ use crate::utils::*;
 
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-pub trait Mutation: Clone + 'static {
+pub trait Mutation: 'static {
     type Input: Clone + 'static;
     type Output: Clone + 'static;
     type Err: Clone + 'static;
@@ -14,12 +14,19 @@ pub trait Mutation: Clone + 'static {
     async fn exec(&self, input: Self::Input) -> Result<Self::Output, Self::Err>;
 }
 
-pub type MutationActionT<M: Mutation> = Action<M::Input, Result<M::Output, M::Err>>;
+pub type MutationActionT<M: Mutation + ?Sized> = Action<M::Input, Result<M::Output, M::Err>>;
 
-#[derive(Clone)]
-pub struct MutationAction<M: Mutation>(MutationActionT<M>);
+// #[derive(Clone)]
+pub struct MutationAction<M: Mutation + ?Sized>(MutationActionT<M>);
 
-impl<M: Mutation> MutationAction<M> {
+impl<M: Mutation + ?Sized> Clone for MutationAction<M> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+impl<M: Mutation + ?Sized> Copy for MutationAction<M> {}
+
+impl<M: Mutation + ?Sized> MutationAction<M> {
     pub fn new(cmd: &Shared<M>) -> Self {
         let cmd = store_value(cmd.clone());
         Self(create_action(move |input: &M::Input| {
@@ -49,9 +56,7 @@ impl<M: Mutation> MutationAction<M> {
     }
 }
 
-impl<M: Mutation> std::marker::Copy for MutationAction<M> {}
-
-impl<M: Mutation> std::ops::Deref for MutationAction<M> {
+impl<M: Mutation + ?Sized> std::ops::Deref for MutationAction<M> {
     type Target = MutationActionT<M>;
 
     fn deref(&self) -> &Self::Target {
@@ -59,14 +64,12 @@ impl<M: Mutation> std::ops::Deref for MutationAction<M> {
     }
 }
 
-pub trait MutationState: Clone + Copy + Sized + 'static {
-    type Env;
+pub trait UseMutation<Env>: Clone + Sized + 'static {
+    fn new(env: Shared<Env>) -> Self;
 
-    fn new(env: Shared<Self::Env>) -> Self;
-
-    fn provide(env: Shared<Self::Env>) -> Self {
+    fn provide(env: Shared<Env>) -> Self {
         let s = Self::new(env);
-        provide_context(s);
+        provide_context(s.clone());
         s
     }
 

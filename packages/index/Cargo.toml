@@ -1,5 +1,5 @@
 [package]
-name = "leptos-ezgst"
+name = "leptos-ezs"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -10,5 +10,5 @@ readme = "../../README.md"
 keywords = ["leptos", "state", "global", "di", "dependency-injection"]
 
 [dependencies]
-leptos-ezgst-macros.workspace = true
-leptos-ezgst-core.workspace = true
+leptos-ezs-macros.workspace = true
+leptos-ezs-core.workspace = true
