@@ -7,7 +7,7 @@ use crate::utils::*;
 
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-pub trait Query: Clone + 'static {
+pub trait Query: 'static {
     type Input: Clone + PartialEq + 'static;
     type Output: Clone + serde::Serialize + DeserializeOwned + 'static;
     type Err: Clone + serde::Serialize + DeserializeOwned + 'static;
@@ -17,13 +17,13 @@ pub trait Query: Clone + 'static {
 }
 
 #[derive(Clone)]
-pub struct QueryFetcher<Q: Query> {
+pub struct QueryFetcher<Q: Query + ?Sized> {
     query: StoredValue<DI<Q>>,
     on_ok: StoredValue<Option<Shared<dyn Fn(Q::Output)>>>,
     on_err: StoredValue<Option<Shared<dyn Fn(Q::Err)>>>,
 }
 
-impl<Q: Query> QueryFetcher<Q> {
+impl<Q: Query + ?Sized> QueryFetcher<Q> {
     pub fn new(query: DI<Q>) -> Self {
         Self {
             query: store_value(query),
@@ -82,7 +82,7 @@ impl<Q: Query> QueryFetcher<Q> {
 }
 
 #[derive(Clone, Copy)]
-pub struct ResourceW<Q: Query>(Resource<Q::Input, Result<Q::Output, Q::Err>>);
+pub struct ResourceW<Q: Query + ?Sized>(Resource<Q::Input, Result<Q::Output, Q::Err>>);
 
 impl<Q: Query> ResourceW<Q> {
     pub fn output(&self) -> Signal<Option<Q::Output>> {
@@ -115,13 +115,15 @@ impl<Q: Query> ResourceW<Q> {
     }
 }
 
-pub trait QueryFetcherModifier<Q: Query> {
+pub trait QueryFetcherModifier<Q: Query + ?Sized> {
     fn modify_fetcher(&self, fetcher: QueryFetcher<Q>) -> QueryFetcher<Q> {
         fetcher
     }
 }
 
-pub trait UseQuery<Q: Query>: QueryFetcherModifier<Q> + Clone + Copy + Sized + 'static {
+pub trait UseQuery<Q: Query + ?Sized>:
+    QueryFetcherModifier<Q> + Clone + Copy + Sized + 'static
+{
     fn new(env: Shared<Q>) -> Self;
 
     fn provide(env: Shared<Q>) -> Self {
@@ -141,12 +143,17 @@ pub trait UseQuery<Q: Query>: QueryFetcherModifier<Q> + Clone + Copy + Sized + '
     }
 }
 
-#[derive(Clone)]
-pub struct QueryWrapper<Q: Query>(StoredValue<Shared<Q>>);
+// #[derive(Clone)]
+pub struct QueryWrapper<Q: Query + ?Sized>(StoredValue<Shared<Q>>);
 
-impl<Q: Query> Copy for QueryWrapper<Q> {}
+impl<Q: Query + ?Sized> Clone for QueryWrapper<Q> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+impl<Q: Query + ?Sized> Copy for QueryWrapper<Q> {}
 
-impl<Q: Query> QueryWrapper<Q> {
+impl<Q: Query + ?Sized> QueryWrapper<Q> {
     pub fn new(query: Shared<Q>) -> Self {
         Self(store_value(query))
     }
@@ -154,4 +161,3 @@ impl<Q: Query> QueryWrapper<Q> {
         QueryFetcher::new(self.0.get_value())
     }
 }
-

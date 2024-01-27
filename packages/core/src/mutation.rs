@@ -3,8 +3,7 @@ use leptos::*;
 
 use crate::utils::*;
 
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[async_trait(?Send)]
 pub trait Mutation: 'static {
     type Input: Clone + 'static;
     type Output: Clone + 'static;
