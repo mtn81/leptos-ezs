@@ -5,8 +5,8 @@ use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input,
     punctuated::Punctuated,
-    Attribute, Data, DeriveInput, GenericArgument, Ident, ImplItem, ItemImpl, ItemStruct, Meta,
-    Path, PathArguments, Token, Type, TypeParamBound,
+    Attribute, Data, DeriveInput, Fields, GenericArgument, Ident, ImplItem, ItemImpl, ItemStruct,
+    Meta, Path, PathArguments, Token, Type, TypeParamBound,
 };
 
 /// Generate a Mutation trait & implementation for ['Mutation'].
@@ -130,28 +130,16 @@ pub fn use_mutation(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
             .iter()
             .map(|f| {
                 let fname = &f.ident;
-                let fty = match &f.ty {
-                    Type::Path(path) => {
-                        let p = path.path.segments.first();
-                        if p.map(|p| p.ident.to_string()) == Some("MutationAction".to_string()) {
-                            match &p.unwrap().arguments {
-                                PathArguments::AngleBracketed(args) => &args.args,
-                                _ => panic!("field type must be MutationAction<T>"),
-                            }
-                        } else {
-                            panic!("field type must be MutationAction<T>")
-                        }
-                    }
-                    _ => panic!("field type must be MutationAction<T>"), // TODO
-                };
+                let fty = ty_to_generic_args(&f.ty, "MutationAction")
+                    .expect("field type must be MutationAction<T>");
                 quote! {
-                    pub #fname: DI<#fty>
+                    pub #fname: portaldi::DI<#fty>
                 }
             })
             .collect::<Vec<_>>();
 
         quote! {
-            #[derive(DIPortal)]
+            #[derive(portaldi::DIPortal)]
             pub struct #env_ident {
                 #(#env_fields),*
             }
@@ -168,7 +156,7 @@ pub fn use_mutation(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
 
         quote! {
             impl UseMutation<#env_ident> for #ident {
-                fn new(env: DI<#env_ident>) -> Self {
+                fn new(env: portaldi::DI<#env_ident>) -> Self {
                     Self {
                         #(#fields),*
                     }
@@ -184,16 +172,86 @@ pub fn use_mutation(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
         #impl_use_mutation_q
     };
 
-    println!("!!!! {}", &result);
+    // println!("!!!! {}", &result);
 
     result.into()
 }
+
+/// Generate a implementation for ['UseQuery'].
+///
+/// Usage:
+/// ```ignore
+/// #[use_query]
+/// pub struct UseHogeQuery(QueryWrapper<HogeQuery>, RwSignal<HogeState>);
+/// ```
+///
+/// Generated codes are like this.
+/// ```ignore
+/// impl UseQuery<HogeQuery> for UseHogeQuery {
+///     fn new(query: DI<HogeQuery>) -> Self {
+///         Self(QueryWrapper::new(query), create_rw_signal(HogeState::default()))
+///     }
+///     fn inner(&self) -> &QueryWrapper<HogeQuery> {
+///         &self.0
+///     }
+/// }
+/// ```
 #[proc_macro_attribute]
-pub fn use_stateful_query(attr: TokenStream, tokens: TokenStream) -> TokenStream {
-    todo!()
-}
-#[proc_macro_attribute]
-pub fn use_stateless_query(attr: TokenStream, tokens: TokenStream) -> TokenStream {
-    todo!()
+pub fn use_query(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
+    let item: ItemStruct = parse_macro_input!(tokens);
+    let ident = &item.ident;
+
+    let impl_use_query_q = {
+        let msg = "Fields muat be (QueryWrapper<Query>, RwSignal<State>)";
+        let (query_ty, state_ty) = match &item.fields {
+            Fields::Unnamed(fs) => {
+                let query_ty =
+                    ty_to_generic_args(&fs.unnamed.first().expect(msg).ty, "QueryWrapper")
+                        .expect(msg);
+                let state_ty =
+                    ty_to_generic_args(&fs.unnamed.last().expect(msg).ty, "RwSignal").expect(msg);
+                (query_ty, state_ty)
+            }
+            _ => panic!("{}", msg), // TODO
+        };
+
+        quote! {
+            impl UseQuery<#query_ty> for #ident {
+                fn new(query: portaldi::DI<#query_ty>) -> Self {
+                    Self(QueryWrapper::new(query), create_rw_signal(#state_ty::default()))
+                }
+                fn inner(&self) -> &QueryWrapper<#query_ty> {
+                    &self.0
+                }
+            }
+        }
+    };
+
+    let result = quote! {
+        #[derive(Clone, Copy)]
+        #item
+        #impl_use_query_q
+    };
+
+    result.into()
 }
 
+fn ty_to_generic_args<'a>(
+    ty: &Type,
+    container_type_name: &str,
+) -> Option<Punctuated<GenericArgument, Token![,]>> {
+    match ty {
+        Type::Path(path) => {
+            let p = path.path.segments.first();
+            if p.map(|p| p.ident.to_string()) == Some(container_type_name.to_string()) {
+                match &p.unwrap().arguments {
+                    PathArguments::AngleBracketed(args) => Some(args.args.clone()),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}

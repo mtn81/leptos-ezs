@@ -12,4 +12,8 @@ keywords = ["leptos", "state", "global", "di", "dependency-injection"]
 [dependencies]
 leptos-ezs-macros.workspace = true
 leptos-ezs-core.workspace = true
-portaldi = "0.2.14"
+portaldi = { version = "0.2.15", optional = true }
+
+[features]
+default = []
+with-portaldi = ["portaldi"]
