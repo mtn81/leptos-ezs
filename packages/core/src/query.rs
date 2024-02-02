@@ -16,15 +16,26 @@ pub trait Query: 'static {
     async fn exec(&self, input: Self::Input) -> Result<Self::Output, Self::Err>;
 }
 
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct QueryFetcher<Q: Query + ?Sized> {
-    query: StoredValue<DI<Q>>,
+    query: StoredValue<QueryWrapper<Q>>,
     on_ok: StoredValue<Option<Shared<dyn Fn(Q::Output)>>>,
     on_err: StoredValue<Option<Shared<dyn Fn(Q::Err)>>>,
 }
 
+impl<Q: Query + ?Sized> Clone for QueryFetcher<Q> {
+    fn clone(&self) -> Self {
+        Self {
+            query: self.query.clone(),
+            on_ok: self.on_ok.clone(),
+            on_err: self.on_err.clone(),
+        }
+    }
+}
+impl<Q: Query + ?Sized> Copy for QueryFetcher<Q> {}
+
 impl<Q: Query + ?Sized> QueryFetcher<Q> {
-    pub fn new(query: DI<Q>) -> Self {
+    pub fn new(query: QueryWrapper<Q>) -> Self {
         Self {
             query: store_value(query),
             on_ok: store_value(None),
@@ -44,17 +55,21 @@ impl<Q: Query + ?Sized> QueryFetcher<Q> {
         let query = self.query;
         let on_ok = self.on_ok;
         let on_err = self.on_err;
-        ResourceW(create_resource(move || input.clone(), {
-            move |input| Self::fetch(query, on_ok, on_err, input)
-        }))
+        let res = ResourceW(create_resource(move || input.clone(), {
+            move |input| Self::fetch(query.get_value().0, on_ok, on_err, input)
+        }));
+        self.query.get_value().1.set(Some(res.clone()));
+        res
     }
     pub fn run_with_memo(&self, input: Memo<Q::Input>) -> ResourceW<Q> {
         let query = self.query;
         let on_ok = self.on_ok;
         let on_err = self.on_err;
-        ResourceW(create_resource(input, {
-            move |input| Self::fetch(query, on_ok, on_err, input)
-        }))
+        let res = ResourceW(create_resource(input, {
+            move |input| Self::fetch(query.get_value().0, on_ok, on_err, input)
+        }));
+        self.query.get_value().1.set(Some(res.clone()));
+        res
     }
 
     async fn fetch(
@@ -63,6 +78,7 @@ impl<Q: Query + ?Sized> QueryFetcher<Q> {
         on_err: StoredValue<Option<Shared<dyn Fn(Q::Err)>>>,
         input: Q::Input,
     ) -> Result<Q::Output, Q::Err> {
+        logging::log!("!!! fetch !!!");
         // TODO debounce, cache, retry handling
         let result = query.get_value().exec(input).await;
         match &result {
@@ -81,10 +97,17 @@ impl<Q: Query + ?Sized> QueryFetcher<Q> {
     }
 }
 
-#[derive(Clone, Copy)]
+// #[derive(Clone, Copy)]
 pub struct ResourceW<Q: Query + ?Sized>(Resource<Q::Input, Result<Q::Output, Q::Err>>);
 
-impl<Q: Query> ResourceW<Q> {
+impl<Q: Query + ?Sized> Clone for ResourceW<Q> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+impl<Q: Query + ?Sized> Copy for ResourceW<Q> {}
+
+impl<Q: Query + ?Sized> ResourceW<Q> {
     pub fn output(&self) -> Signal<Option<Q::Output>> {
         let r = self.0;
         Signal::derive(move || (r.get().and_then(move |v| v.ok())))
@@ -141,23 +164,28 @@ pub trait UseQuery<Q: Query + ?Sized>:
     fn fetcher(&self) -> QueryFetcher<Q> {
         self.modify_fetcher(self.inner().create_fetcher())
     }
+
+    fn last_output(&self) -> Signal<Option<Q::Output>> {
+        let x = self.inner().1;
+        Signal::derive(move || x.get().and_then(|r| r.output().get()))
+    }
 }
 
 // #[derive(Clone)]
-pub struct QueryWrapper<Q: Query + ?Sized>(StoredValue<Shared<Q>>);
+pub struct QueryWrapper<Q: Query + ?Sized>(StoredValue<Shared<Q>>, RwSignal<Option<ResourceW<Q>>>);
 
 impl<Q: Query + ?Sized> Clone for QueryWrapper<Q> {
     fn clone(&self) -> Self {
-        Self(self.0.clone())
+        Self(self.0.clone(), self.1.clone())
     }
 }
 impl<Q: Query + ?Sized> Copy for QueryWrapper<Q> {}
 
 impl<Q: Query + ?Sized> QueryWrapper<Q> {
     pub fn new(query: Shared<Q>) -> Self {
-        Self(store_value(query))
+        Self(store_value(query), create_rw_signal(None))
     }
     pub fn create_fetcher(&self) -> QueryFetcher<Q> {
-        QueryFetcher::new(self.0.get_value())
+        QueryFetcher::new(self.clone())
     }
 }

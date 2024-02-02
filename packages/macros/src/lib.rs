@@ -24,12 +24,12 @@ pub fn def_mutation_trait(input: TokenStream) -> TokenStream {
     let result = quote! {
         type Result = std::result::Result<Output, Err>;
 
-        #[async_trait(?Send)]
+        #[async_trait::async_trait(?Send)]
         pub trait #target_ident: DITarget {
             async fn exec(&self, input: Input) -> Result;
         }
 
-        #[async_trait(?Send)]
+        #[async_trait::async_trait(?Send)]
         impl Mutation for dyn #target_ident {
             type Input = Input;
             type Output = Output;
@@ -58,14 +58,14 @@ pub fn def_query_trait(input: TokenStream) -> TokenStream {
     let result = quote! {
         type Result = std::result::Result<Output, Err>;
 
-        #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-        #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+        #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+        #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
         pub trait #target_ident: DITarget {
             async fn exec(&self, input: Input) -> Result;
         }
 
-        #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-        #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+        #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+        #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
         impl Query for dyn #target_ident {
             type Input = Input;
             type Output = Output;
