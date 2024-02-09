@@ -75,7 +75,7 @@ impl<Q: LocalQuery + ?Sized> LocalQueryFetcher<Q> {
         on_err: StoredValue<Option<Shared<dyn Fn(Q::Err)>>>,
         input: Q::Input,
     ) -> Result<Q::Output, Q::Err> {
-        logging::log!("!!! fetch !!!");
+        logging::log!("Fetching local query");
         // TODO debounce, cache, retry handling
         let result = query.get_value().exec(input).await;
         match &result {

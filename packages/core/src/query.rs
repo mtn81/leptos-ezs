@@ -54,7 +54,7 @@ impl<Q: Query + ?Sized> QueryFetcher<Q> {
     }
 
     async fn fetch(query: StoredValue<Shared<Q>>, input: Q::Input) -> Result<Q::Output, Q::Err> {
-        logging::log!("!!! fetch !!!");
+        logging::log!("Fetching query");
         // TODO debounce, cache, retry handling
         let result = query.get_value().exec(input).await;
         result
