@@ -8,3 +8,6 @@ pub use mutation::*;
 
 mod query;
 pub use query::*;
+
+mod local_query;
+pub use local_query::*;

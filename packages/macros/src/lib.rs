@@ -79,6 +79,40 @@ pub fn def_query_trait(input: TokenStream) -> TokenStream {
     result.into()
 }
 
+/// Generate a LocalQuery trait & implementation for ['LocalQuery'].
+/// The Input, Output and Err types must be in scope.
+///
+/// ```ignore
+///
+/// def_local_query_trait!(Hoge);
+///
+/// ```
+#[proc_macro]
+pub fn def_local_query_trait(input: TokenStream) -> TokenStream {
+    let DefTraitInput { target_ident } = parse_macro_input!(input as DefTraitInput);
+
+    let result = quote! {
+        type Result = std::result::Result<Output, Err>;
+
+        #[async_trait::async_trait(?Send)]
+        pub trait #target_ident: DITarget {
+            async fn exec(&self, input: Input) -> Result;
+        }
+
+        #[async_trait::async_trait(?Send)]
+        impl LocalQuery for dyn #target_ident {
+            type Input = Input;
+            type Output = Output;
+            type Err = Err;
+            async fn exec(&self, input: Self::Input) -> Self::Result {
+                (self as &dyn #target_ident).exec(input).await
+            }
+        }
+    };
+
+    result.into()
+}
+
 struct DefTraitInput {
     target_ident: syn::Ident,
 }
@@ -182,14 +216,14 @@ pub fn use_mutation(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
 /// Usage:
 /// ```ignore
 /// #[use_query]
-/// pub struct UseHogeQuery(QueryWrapper<HogeQuery>, RwSignal<HogeState>);
+/// pub struct UseHogeQuery(LocalQueryWrapper<HogeQuery>);
 /// ```
 ///
 /// Generated codes are like this.
 /// ```ignore
 /// impl UseQuery<HogeQuery> for UseHogeQuery {
 ///     fn new(query: DI<HogeQuery>) -> Self {
-///         Self(QueryWrapper::new(query), create_rw_signal(HogeState::default()))
+///         Self(QueryWrapper::new(query))
 ///     }
 ///     fn inner(&self) -> &QueryWrapper<HogeQuery> {
 ///         &self.0
@@ -202,11 +236,65 @@ pub fn use_query(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
     let ident = &item.ident;
 
     let impl_use_query_q = {
-        let msg = "Fields muat be (QueryWrapper<Query>, RwSignal<State>)";
+        let msg = "Fields muat be (LocalQueryWrapper<Query>";
+        let query_ty = match &item.fields {
+            Fields::Unnamed(fs) => {
+                ty_to_generic_args(&fs.unnamed.first().expect(msg).ty, "QueryWrapper").expect(msg)
+            }
+            _ => panic!("{}", msg), // TODO
+        };
+
+        quote! {
+            impl UseQuery<#query_ty> for #ident {
+                fn new(query: portaldi::DI<#query_ty>) -> Self {
+                    Self(QueryWrapper::new(query))
+                }
+                fn inner(&self) -> &QueryWrapper<#query_ty> {
+                    &self.0
+                }
+            }
+        }
+    };
+
+    let result = quote! {
+        #[derive(Clone, Copy)]
+        #item
+        #impl_use_query_q
+    };
+
+    result.into()
+}
+
+/// Generate a implementation for ['UseLocalQuery'].
+///
+/// Usage:
+/// ```ignore
+/// #[use_local_query]
+/// pub struct UseHogeQuery(LocalQueryWrapper<HogeQuery>, RwSignal<HogeState>);
+/// ```
+///
+/// Generated codes are like this.
+/// ```ignore
+/// impl UseLocalQuery<HogeQuery> for UseHogeQuery {
+///     fn new(query: DI<HogeQuery>) -> Self {
+///         Self(QueryWrapper::new(query), create_rw_signal(HogeState::default()))
+///     }
+///     fn inner(&self) -> &QueryWrapper<HogeQuery> {
+///         &self.0
+///     }
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn use_local_query(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
+    let item: ItemStruct = parse_macro_input!(tokens);
+    let ident = &item.ident;
+
+    let impl_use_query_q = {
+        let msg = "Fields muat be (LocalQueryWrapper<Query>, RwSignal<State>)";
         let (query_ty, state_ty) = match &item.fields {
             Fields::Unnamed(fs) => {
                 let query_ty =
-                    ty_to_generic_args(&fs.unnamed.first().expect(msg).ty, "QueryWrapper")
+                    ty_to_generic_args(&fs.unnamed.first().expect(msg).ty, "LocalQueryWrapper")
                         .expect(msg);
                 let state_ty =
                     ty_to_generic_args(&fs.unnamed.last().expect(msg).ty, "RwSignal").expect(msg);
@@ -216,11 +304,11 @@ pub fn use_query(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
         };
 
         quote! {
-            impl UseQuery<#query_ty> for #ident {
+            impl UseLocalQuery<#query_ty> for #ident {
                 fn new(query: portaldi::DI<#query_ty>) -> Self {
-                    Self(QueryWrapper::new(query), create_rw_signal(#state_ty::default()))
+                    Self(LocalQueryWrapper::new(query), create_rw_signal(#state_ty::default()))
                 }
-                fn inner(&self) -> &QueryWrapper<#query_ty> {
+                fn inner(&self) -> &LocalQueryWrapper<#query_ty> {
                     &self.0
                 }
             }
@@ -257,7 +345,7 @@ fn ty_to_generic_args<'a>(
 }
 
 #[proc_macro_attribute]
-pub fn with_async_trait(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
+pub fn async_trait_for_query(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
     let item_impl = parse_macro_input!(tokens as ItemImpl);
 
     let result = quote! {
