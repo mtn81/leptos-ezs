@@ -255,3 +255,16 @@ fn ty_to_generic_args<'a>(
         _ => None,
     }
 }
+
+#[proc_macro_attribute]
+pub fn with_async_trait(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
+    let item_impl = parse_macro_input!(tokens as ItemImpl);
+
+    let result = quote! {
+        #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+        #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+        #item_impl
+    };
+
+    result.into()
+}

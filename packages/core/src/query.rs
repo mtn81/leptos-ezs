@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use leptos::*;
-use portaldi::DI;
 use serde::de::DeserializeOwned;
 
 use crate::utils::*;
