@@ -143,10 +143,12 @@ pub trait LocalQueryFetcherModifier<Q: LocalQuery + ?Sized> {
     }
 }
 
-pub trait UseLocalQuery<Q: LocalQuery + ?Sized>:
+pub trait UseLocalQuery<Q: LocalQuery + ?Sized, S>:
     LocalQueryFetcherModifier<Q> + Clone + Copy + Sized + 'static
 {
     fn new(env: Shared<Q>) -> Self;
+    fn inner(&self) -> &LocalQueryWrapper<Q>;
+    fn state(&self) -> Signal<S>;
 
     fn provide(env: Shared<Q>) -> Self {
         let s = Self::new(env);
@@ -158,13 +160,11 @@ pub trait UseLocalQuery<Q: LocalQuery + ?Sized>:
         expect_context()
     }
 
-    fn expect_with<T>(f: impl Fn(LocalQueryFetcher<Q>) -> T) -> (Self, T) {
+    fn expect_with<T>(f: impl Fn(LocalQueryFetcher<Q>) -> T) -> (Self, Signal<S>, T) {
         let _self = Self::expect();
         let res = f(_self.fetcher());
-        (_self, res)
+        (_self, _self.state(), res)
     }
-
-    fn inner(&self) -> &LocalQueryWrapper<Q>;
 
     fn fetcher(&self) -> LocalQueryFetcher<Q> {
         self.modify_fetcher(self.inner().create_fetcher())

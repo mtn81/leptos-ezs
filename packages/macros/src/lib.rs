@@ -20,8 +20,15 @@ use syn::{
 #[proc_macro]
 pub fn def_mutation_trait(input: TokenStream) -> TokenStream {
     let DefTraitInput { target_ident } = parse_macro_input!(input as DefTraitInput);
+    let input_ident = format_ident!("{}Input", target_ident);
+    let output_ident = format_ident!("{}Output", target_ident);
+    let err_ident = format_ident!("{}Err", target_ident);
 
     let result = quote! {
+        pub type #input_ident = Input;
+        pub type #output_ident = Output;
+        pub type #err_ident = Err;
+
         type Result = std::result::Result<Output, Err>;
 
         #[async_trait::async_trait(?Send)]
@@ -54,8 +61,14 @@ pub fn def_mutation_trait(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn def_query_trait(input: TokenStream) -> TokenStream {
     let DefTraitInput { target_ident } = parse_macro_input!(input as DefTraitInput);
+    let input_ident = format_ident!("{}Input", target_ident);
+    let output_ident = format_ident!("{}Output", target_ident);
+    let err_ident = format_ident!("{}Err", target_ident);
 
     let result = quote! {
+        pub type #input_ident = Input;
+        pub type #output_ident = Output;
+        pub type #err_ident = Err;
         type Result = std::result::Result<Output, Err>;
 
         #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
@@ -90,8 +103,14 @@ pub fn def_query_trait(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn def_local_query_trait(input: TokenStream) -> TokenStream {
     let DefTraitInput { target_ident } = parse_macro_input!(input as DefTraitInput);
+    let input_ident = format_ident!("{}Input", target_ident);
+    let output_ident = format_ident!("{}Output", target_ident);
+    let err_ident = format_ident!("{}Err", target_ident);
 
     let result = quote! {
+        pub type #input_ident = Input;
+        pub type #output_ident = Output;
+        pub type #err_ident = Err;
         type Result = std::result::Result<Output, Err>;
 
         #[async_trait::async_trait(?Send)]
@@ -282,6 +301,9 @@ pub fn use_query(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
 ///     fn inner(&self) -> &QueryWrapper<HogeQuery> {
 ///         &self.0
 ///     }
+///     fn state(&self) -> RwSignal<HogeState> {
+///         self.1
+///     }
 /// }
 /// ```
 #[proc_macro_attribute]
@@ -304,12 +326,15 @@ pub fn use_local_query(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
         };
 
         quote! {
-            impl UseLocalQuery<#query_ty> for #ident {
+            impl UseLocalQuery<#query_ty, #state_ty> for #ident {
                 fn new(query: portaldi::DI<#query_ty>) -> Self {
                     Self(LocalQueryWrapper::new(query), create_rw_signal(#state_ty::default()))
                 }
                 fn inner(&self) -> &LocalQueryWrapper<#query_ty> {
                     &self.0
+                }
+                fn state(&self) -> Signal<#state_ty> {
+                    self.1.into()
                 }
             }
         }
@@ -356,3 +381,4 @@ pub fn async_trait_for_query(_attr: TokenStream, tokens: TokenStream) -> TokenSt
 
     result.into()
 }
+
