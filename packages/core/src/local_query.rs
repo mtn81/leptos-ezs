@@ -137,14 +137,14 @@ impl<Q: LocalQuery + ?Sized> LocalQueryResource<Q> {
     }
 }
 
-pub trait LocalQueryFetcherModifier<Q: LocalQuery + ?Sized> {
+pub trait ModifyLocalQueryFetcher<Q: LocalQuery + ?Sized> {
     fn modify_fetcher(&self, fetcher: LocalQueryFetcher<Q>) -> LocalQueryFetcher<Q> {
         fetcher
     }
 }
 
 pub trait UseLocalQuery<Q: LocalQuery + ?Sized, S>:
-    LocalQueryFetcherModifier<Q> + Clone + Copy + Sized + 'static
+    ModifyLocalQueryFetcher<Q> + Clone + Copy + Sized + 'static
 {
     fn new(env: Shared<Q>) -> Self;
     fn inner(&self) -> &LocalQueryWrapper<Q>;
@@ -209,3 +209,4 @@ impl<Q: LocalQuery + ?Sized> LocalQueryWrapper<Q> {
         LocalQueryFetcher::new(self.clone())
     }
 }
+
