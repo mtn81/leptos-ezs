@@ -39,11 +39,11 @@ impl<Q: LocalQuery + ?Sized> LocalQueryFetcher<Q> {
             on_err: store_value(None),
         }
     }
-    pub fn with_watch_ok(mut self, callback: impl Fn(Q::Output) + 'static) -> Self {
+    pub fn with_watch_ok(&mut self, callback: impl Fn(Q::Output) + 'static) -> &mut Self {
         self.on_ok = store_value(Some(Shared::new(callback)));
         self
     }
-    pub fn with_watch_err(mut self, callback: impl Fn(Q::Err) + 'static) -> Self {
+    pub fn with_watch_err(&mut self, callback: impl Fn(Q::Err) + 'static) -> &mut Self {
         self.on_err = store_value(Some(Shared::new(callback)));
         self
     }
@@ -137,14 +137,12 @@ impl<Q: LocalQuery + ?Sized> LocalQueryResource<Q> {
     }
 }
 
-pub trait ModifyLocalQueryFetcher<Q: LocalQuery + ?Sized> {
-    fn modify_fetcher(&self, fetcher: LocalQueryFetcher<Q>) -> LocalQueryFetcher<Q> {
-        fetcher
-    }
+pub trait InitializeLocalQueryFetcher<Q: LocalQuery + ?Sized> {
+    fn initialize_fetcher(&self, _fetcher: &mut LocalQueryFetcher<Q>) {}
 }
 
 pub trait UseLocalQuery<Q: LocalQuery + ?Sized, S>:
-    ModifyLocalQueryFetcher<Q> + Clone + Copy + Sized + 'static
+    InitializeLocalQueryFetcher<Q> + Clone + Copy + Sized + 'static
 {
     fn new(env: Shared<Q>) -> Self;
     fn inner(&self) -> &LocalQueryWrapper<Q>;
@@ -167,7 +165,9 @@ pub trait UseLocalQuery<Q: LocalQuery + ?Sized, S>:
     }
 
     fn fetcher(&self) -> LocalQueryFetcher<Q> {
-        self.modify_fetcher(self.inner().create_fetcher())
+        let mut fetcher = self.inner().create_fetcher();
+        self.initialize_fetcher(&mut fetcher);
+        fetcher
     }
 
     fn last_output(&self) -> Option<Q::Output> {
@@ -176,7 +176,7 @@ pub trait UseLocalQuery<Q: LocalQuery + ?Sized, S>:
     }
 }
 
-pub trait InitializeUseLocalQuery<T: Copy + 'static> {
+pub trait InitializeLocally<T: Copy + 'static> {
     fn initialize(&self, params: T) -> Effect<()>
     where
         Self: Clone + 'static,
@@ -209,4 +209,22 @@ impl<Q: LocalQuery + ?Sized> LocalQueryWrapper<Q> {
         LocalQueryFetcher::new(self.clone())
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
