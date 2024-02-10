@@ -176,16 +176,16 @@ pub trait UseLocalQuery<Q: LocalQuery + ?Sized, S>:
     }
 }
 
-pub trait InitializeLocally<T: Copy + 'static> {
-    fn initialize(&self, params: T) -> Effect<()>
+pub trait InitializeLocally<D: Copy + 'static> {
+    fn initialize(&self, deps: D) -> Effect<()>
     where
         Self: Clone + 'static,
     {
         let _self = self.clone();
-        create_render_effect(move |_| _self.do_initialize(params))
+        create_render_effect(move |_| _self.do_initialize(deps))
     }
 
-    fn do_initialize(&self, params: T);
+    fn do_initialize(&self, deps: D);
 }
 
 // #[derive(Clone)]
