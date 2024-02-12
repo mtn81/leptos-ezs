@@ -36,9 +36,9 @@ impl<Q: Query + ?Sized> QueryFetcher<Q> {
         }
     }
 
-    pub fn run(&self, input: Q::Input) -> QueryResource<Q> {
+    pub fn run(&self, input: impl Fn() -> Q::Input + 'static) -> QueryResource<Q> {
         let query = self.query;
-        let res = QueryResource(create_resource(move || input.clone(), {
+        let res = QueryResource(create_resource(input, {
             move |input| Self::fetch(query.get_value().0, input)
         }));
         self.query.get_value().1.set(Some(res.clone()));
@@ -99,10 +99,10 @@ pub trait UseQuery<Q: Query + ?Sized>: Clone + Copy + Sized + 'static {
         expect_context()
     }
 
-    fn expect_with<T>(f: impl Fn(QueryFetcher<Q>) -> T) -> (Self, T) {
+    fn expect_with<T>(f: impl Fn(QueryFetcher<Q>) -> T) -> (T, Self) {
         let _self = Self::expect();
         let res = f(_self.fetcher());
-        (_self, res)
+        (res, _self)
     }
 
     fn inner(&self) -> &QueryWrapper<Q>;
@@ -138,3 +138,6 @@ impl<Q: Query + ?Sized> QueryWrapper<Q> {
         QueryFetcher::new(self.clone())
     }
 }
+
+
+

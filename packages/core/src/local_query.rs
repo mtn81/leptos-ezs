@@ -52,7 +52,7 @@ impl<Q: LocalQuery + ?Sized> LocalQueryFetcher<Q> {
         let query = self.query;
         let on_ok = self.on_ok;
         let on_err = self.on_err;
-        let res = LocalQueryResource(create_local_resource(input , {
+        let res = LocalQueryResource(create_local_resource(input, {
             move |input| Self::fetch(query.get_value().0, on_ok, on_err, input)
         }));
         self.query.get_value().1.set(Some(res.clone()));
@@ -158,10 +158,10 @@ pub trait UseLocalQuery<Q: LocalQuery + ?Sized, S>:
         expect_context()
     }
 
-    fn expect_with<T>(f: impl Fn(LocalQueryFetcher<Q>) -> T) -> (Self, Signal<S>, T) {
+    fn expect_with<T>(f: impl Fn(LocalQueryFetcher<Q>) -> T) -> (Signal<S>, T, Self) {
         let _self = Self::expect();
         let res = f(_self.fetcher());
-        (_self, _self.state(), res)
+        (_self.state(), res, _self)
     }
 
     fn fetcher(&self) -> LocalQueryFetcher<Q> {
@@ -209,6 +209,3 @@ impl<Q: LocalQuery + ?Sized> LocalQueryWrapper<Q> {
         LocalQueryFetcher::new(self.clone())
     }
 }
-
-
-
