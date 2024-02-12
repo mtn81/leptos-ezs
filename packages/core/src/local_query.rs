@@ -48,11 +48,11 @@ impl<Q: LocalQuery + ?Sized> LocalQueryFetcher<Q> {
         self
     }
 
-    pub fn run(&self, input: Q::Input) -> LocalQueryResource<Q> {
+    pub fn run(&self, input: impl Fn() -> Q::Input + 'static) -> LocalQueryResource<Q> {
         let query = self.query;
         let on_ok = self.on_ok;
         let on_err = self.on_err;
-        let res = LocalQueryResource(create_local_resource(move || input.clone(), {
+        let res = LocalQueryResource(create_local_resource(input , {
             move |input| Self::fetch(query.get_value().0, on_ok, on_err, input)
         }));
         self.query.get_value().1.set(Some(res.clone()));
@@ -209,3 +209,6 @@ impl<Q: LocalQuery + ?Sized> LocalQueryWrapper<Q> {
         LocalQueryFetcher::new(self.clone())
     }
 }
+
+
+
