@@ -177,7 +177,7 @@ pub trait UseLocalQuery<Q: LocalQuery + ?Sized, S>:
 }
 
 pub trait InitializeLocally<D: Copy + 'static> {
-    fn initialize(&self, deps: D) -> Effect<()>
+    fn initialize_locally(&self, deps: D) -> Effect<()>
     where
         Self: Clone + 'static,
     {
@@ -209,3 +209,4 @@ impl<Q: LocalQuery + ?Sized> LocalQueryWrapper<Q> {
         LocalQueryFetcher::new(self.clone())
     }
 }
+

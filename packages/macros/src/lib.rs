@@ -346,6 +346,8 @@ pub fn use_local_query(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
         #impl_use_query_q
     };
 
+    // println!("{:?}", result.to_string());
+
     result.into()
 }
 
