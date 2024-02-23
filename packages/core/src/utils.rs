@@ -61,6 +61,12 @@ pub mod vec_ops {
             .collect()
     }
 
+    pub fn to_read_only<ID: PartialEq + Clone, D: Clone>(
+        s: RwSignal<VecRwSignals<ID, D>>,
+    ) -> Signal<VecSignals<ID, D>> {
+        Signal::derive(move || s.with(to_signals))
+    }
+
     pub fn to_signals<ID: PartialEq + Clone, D: Clone>(
         rw_sigs: &VecRwSignals<ID, D>,
     ) -> VecSignals<ID, D> {

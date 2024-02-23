@@ -141,12 +141,11 @@ pub trait InitializeLocalQueryFetcher<Q: LocalQuery + ?Sized> {
     fn initialize_fetcher(&self, _fetcher: &mut LocalQueryFetcher<Q>) {}
 }
 
-pub trait UseLocalQuery<Q: LocalQuery + ?Sized, S>:
+pub trait UseLocalQuery<Q: LocalQuery + ?Sized>:
     InitializeLocalQueryFetcher<Q> + Clone + Copy + Sized + 'static
 {
     fn new(env: Shared<Q>) -> Self;
     fn inner(&self) -> &LocalQueryWrapper<Q>;
-    fn state(&self) -> Signal<S>;
 
     fn provide(env: Shared<Q>) -> Self {
         let s = Self::new(env);
@@ -158,10 +157,10 @@ pub trait UseLocalQuery<Q: LocalQuery + ?Sized, S>:
         expect_context()
     }
 
-    fn expect_with<T>(f: impl Fn(LocalQueryFetcher<Q>) -> T) -> (Signal<S>, T, Self) {
+    fn expect_with<T>(f: impl Fn(LocalQueryFetcher<Q>) -> T) -> (Self, T) {
         let _self = Self::expect();
         let res = f(_self.fetcher());
-        (_self.state(), res, _self)
+        (_self, res)
     }
 
     fn fetcher(&self) -> LocalQueryFetcher<Q> {
@@ -174,6 +173,10 @@ pub trait UseLocalQuery<Q: LocalQuery + ?Sized, S>:
         let x = self.inner().1;
         x.get().and_then(|r| r.value())
     }
+}
+
+pub trait LocalQueryState<S> {
+    fn state(&self) -> Signal<S>;
 }
 
 pub trait EventSubsciber<E: Clone + 'static> {

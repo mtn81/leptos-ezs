@@ -272,7 +272,7 @@ pub fn use_mutation(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
         #impl_use_mutation_q
     };
 
-    println!("!!!! {}", &result);
+    // println!("!!!! {}", &result);
 
     result.into()
 }
@@ -373,15 +373,12 @@ pub fn use_local_query(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
         };
 
         quote! {
-            impl UseLocalQuery<#query_ty, #state_ty> for #ident {
+            impl UseLocalQuery<#query_ty> for #ident {
                 fn new(query: portaldi::DI<#query_ty>) -> Self {
                     Self(LocalQueryWrapper::new(query), create_rw_signal(#state_ty::default()))
                 }
                 fn inner(&self) -> &LocalQueryWrapper<#query_ty> {
                     &self.0
-                }
-                fn state(&self) -> Signal<#state_ty> {
-                    self.1.into()
                 }
             }
         }
@@ -393,7 +390,7 @@ pub fn use_local_query(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
         #impl_use_query_q
     };
 
-    // println!("{:?}", result.to_string());
+    println!("!!!! {:?}", result.to_string());
 
     result.into()
 }
