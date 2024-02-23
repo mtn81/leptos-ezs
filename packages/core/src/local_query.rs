@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use leptos::*;
 
-use crate::utils::*;
+use crate::{utils::*, EventAction};
 
 #[async_trait(?Send)]
 pub trait LocalQuery: 'static {
@@ -39,11 +39,11 @@ impl<Q: LocalQuery + ?Sized> LocalQueryFetcher<Q> {
             on_err: store_value(None),
         }
     }
-    pub fn with_watch_ok(&mut self, callback: impl Fn(Q::Output) + 'static) -> &mut Self {
+    pub fn on_ok(&mut self, callback: impl Fn(Q::Output) + 'static) -> &mut Self {
         self.on_ok = store_value(Some(Shared::new(callback)));
         self
     }
-    pub fn with_watch_err(&mut self, callback: impl Fn(Q::Err) + 'static) -> &mut Self {
+    pub fn on_err(&mut self, callback: impl Fn(Q::Err) + 'static) -> &mut Self {
         self.on_err = store_value(Some(Shared::new(callback)));
         self
     }
@@ -176,16 +176,19 @@ pub trait UseLocalQuery<Q: LocalQuery + ?Sized, S>:
     }
 }
 
-pub trait InitializeLocally<D: Copy + 'static> {
-    fn initialize_locally(&self, deps: D) -> Effect<()>
+pub trait EventSubsciber<E: Clone + 'static> {
+    fn create_event_subscriber(&self) -> EventAction<E>
     where
-        Self: Clone + 'static,
+        Self: Copy + 'static,
     {
         let _self = self.clone();
-        create_render_effect(move |_| _self.do_initialize(deps))
+        create_action(move |e: &E| {
+            let e = e.clone();
+            async move { _self.on_event(e) }
+        })
     }
 
-    fn do_initialize(&self, deps: D);
+    fn on_event(&self, event: E);
 }
 
 // #[derive(Clone)]
@@ -209,4 +212,3 @@ impl<Q: LocalQuery + ?Sized> LocalQueryWrapper<Q> {
         LocalQueryFetcher::new(self.clone())
     }
 }
-

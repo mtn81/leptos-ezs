@@ -1,5 +1,6 @@
+use heck::ToUpperCamelCase;
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 use regex::Regex;
 use syn::{
     parse::{Parse, ParseStream},
@@ -161,10 +162,16 @@ impl Parse for DefTraitInput {
 ///     pub bar: DI<Bar>,
 /// }
 ///
-/// impl UseMutation<UseHogeMutationEnv> for UseHogeMutation {
-///     fn new(env: DI<UseHogeMutationEnv>) -> Self {
-///         let foo = MutationAction::new(&env.foo);
-///         let bar = MutationAction::new(&env.bar);
+/// #[derive(derive_more::From, Clone)]
+/// pub enum UseHogeMutationEvent {
+///     Foo(FooOutput),
+///     Bar(BarOutput),
+/// }
+///
+/// impl UseMutation<UseHogeMutationEnv, UseHogeMutationEvent> for UseHogeMutation {
+///     fn new(env: DI<UseHogeMutationEnv>, event_subscribers: &Vec<EventAction<#event_ident>>) -> Self {
+///         let foo = MutationAction::create(&env.foo, event_subscribers);
+///         let bar = MutationAction::create(&env.bar, event_subscribers);
 ///         Self {
 ///             foo,
 ///             bar,
@@ -177,6 +184,8 @@ pub fn use_mutation(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
     let item: ItemStruct = parse_macro_input!(tokens);
     let ident = &item.ident;
     let env_ident = format_ident!("{}Env", &item.ident);
+    let event_ident = format_ident!("{}Event", &item.ident);
+
     let env_q = {
         let env_fields = item
             .fields
@@ -198,18 +207,53 @@ pub fn use_mutation(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
             }
         }
     };
+    let event_q = {
+        let variants = item
+            .fields
+            .iter()
+            .map(|f| {
+                let fname = &f.ident.as_ref().unwrap();
+                let variant_name = format_ident!("{}", fname.to_string().to_upper_camel_case());
+                let binding = ty_to_generic_args(&f.ty, "MutationAction")
+                    .expect("field type must be MutationAction<T>");
+                let output_ident = format_ident!(
+                    "{}Output",
+                    binding
+                        .first()
+                        .unwrap()
+                        .to_token_stream()
+                        .to_string()
+                        .replace("dyn ", "")
+                );
+                quote! {
+                    #variant_name(#output_ident)
+                }
+            })
+            .collect::<Vec<_>>();
+
+        quote! {
+            #[derive(derive_more::From, Clone)]
+            pub enum #event_ident {
+                #(#variants),*
+            }
+        }
+    };
 
     let impl_use_mutation_q = {
         let fields = item.fields.iter().map(|f| {
             let fname = &f.ident;
             quote! {
-                #fname: MutationAction::new(&env.#fname)
+                #fname: MutationAction::create(&env.#fname, event_subscribers)
             }
         });
 
         quote! {
-            impl UseMutation<#env_ident> for #ident {
-                fn new(env: portaldi::DI<#env_ident>) -> Self {
+            impl UseMutation<#env_ident, #event_ident> for #ident {
+
+                fn create(
+                    env: portaldi::DI<#env_ident>,
+                    event_subscribers: &[EventAction<#event_ident>],
+                ) -> Self {
                     Self {
                         #(#fields),*
                     }
@@ -221,11 +265,14 @@ pub fn use_mutation(_attr: TokenStream, tokens: TokenStream) -> TokenStream {
     let result = quote! {
         #[derive(Clone, Copy)]
         #item
+
         #env_q
+        #event_q
+
         #impl_use_mutation_q
     };
 
-    // println!("!!!! {}", &result);
+    println!("!!!! {}", &result);
 
     result.into()
 }
@@ -383,4 +430,3 @@ pub fn async_trait_for_query(_attr: TokenStream, tokens: TokenStream) -> TokenSt
 
     result.into()
 }
-

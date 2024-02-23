@@ -14,6 +14,7 @@ pub trait Mutation: 'static {
 }
 
 pub type MutationActionT<M: Mutation + ?Sized> = Action<M::Input, Result<M::Output, M::Err>>;
+pub type EventAction<E> = Action<E, ()>;
 
 // #[derive(Clone)]
 pub struct MutationAction<M: Mutation + ?Sized>(MutationActionT<M>);
@@ -26,11 +27,24 @@ impl<M: Mutation + ?Sized> Clone for MutationAction<M> {
 impl<M: Mutation + ?Sized> Copy for MutationAction<M> {}
 
 impl<M: Mutation + ?Sized> MutationAction<M> {
-    pub fn new(cmd: &Shared<M>) -> Self {
+    pub fn create<E: From<M::Output> + 'static>(
+        cmd: &Shared<M>,
+        event_subscribers: &[EventAction<E>],
+    ) -> Self {
         let cmd = store_value(cmd.clone());
+        let event_subscribers = store_value(event_subscribers.to_vec());
         Self(create_action(move |input: &M::Input| {
             let input = input.clone();
-            async move { cmd.get_value().exec(input).await }
+            async move {
+                let result = cmd.get_value().exec(input).await;
+                if let Ok(r) = result.as_ref() {
+                    event_subscribers
+                        .get_value()
+                        .iter()
+                        .for_each(|event_bus| event_bus.dispatch(E::from(r.clone())))
+                }
+                result
+            }
         }))
     }
 
@@ -63,11 +77,11 @@ impl<M: Mutation + ?Sized> std::ops::Deref for MutationAction<M> {
     }
 }
 
-pub trait UseMutation<Env>: Clone + Sized + 'static {
-    fn new(env: Shared<Env>) -> Self;
+pub trait UseMutation<Env, E>: Clone + Sized + 'static {
+    fn create(env: Shared<Env>, event_subscribers: &[EventAction<E>]) -> Self;
 
-    fn provide(env: Shared<Env>) -> Self {
-        let s = Self::new(env);
+    fn provide(env: Shared<Env>, event_subscribers: &[EventAction<E>]) -> Self {
+        let s = Self::create(env, event_subscribers);
         provide_context(s.clone());
         s
     }

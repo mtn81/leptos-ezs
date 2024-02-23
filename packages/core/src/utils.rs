@@ -1,9 +1,9 @@
 use leptos::*;
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) type Shared<T> = std::rc::Rc<T>;
+pub type Shared<T> = std::rc::Rc<T>;
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) type Shared<T> = std::sync::Arc<T>;
+pub type Shared<T> = std::sync::Arc<T>;
 
 pub fn option_to_signal<T>(v: Option<T>) -> Option<RwSignal<T>> {
     v.map(|w| create_rw_signal(w))
@@ -16,10 +16,17 @@ pub struct IdentifiedRwSignal<ID: PartialEq + Clone + 'static, D: Clone + 'stati
 }
 
 impl<ID: PartialEq + Clone, D: Clone> IdentifiedRwSignal<ID, D> {
-    pub fn create(id: &ID, data: &D) -> Self {
+    pub fn create_(id: &ID, data: RwSignal<D>) -> Self {
         Self {
             id: id.clone(),
-            sig: create_rw_signal(data.clone()),
+            sig: data,
+        }
+    }
+    pub fn create(id: &ID, data: &D) -> Self {
+        let sig = create_rw_signal(data.clone());
+        Self {
+            id: id.clone(),
+            sig,
         }
     }
 }
@@ -34,7 +41,7 @@ impl<ID: PartialEq + Clone, D: Clone> From<&IdentifiedRwSignal<ID, D>> for Ident
     fn from(value: &IdentifiedRwSignal<ID, D>) -> Self {
         Self {
             id: value.id.clone(),
-            sig: value.sig.into_signal(),
+            sig: value.sig.into(),
         }
     }
 }
@@ -65,7 +72,13 @@ pub mod vec_ops {
         id: &ID,
         data: &D,
     ) {
-        state.update(|vec| vec.push(IdentifiedRwSignal::create(id, data)));
+        state.update(|vec| {
+            let mut x = vec![];
+            x.append(vec);
+            x.push(IdentifiedRwSignal::create(id, data));
+            *vec = x;
+            // vec.push(IdentifiedRwSignal::create(id, data))
+        });
     }
     pub fn update<ID: PartialEq + Clone, D: Clone>(
         state: RwSignal<VecRwSignals<ID, D>>,
@@ -80,4 +93,3 @@ pub mod vec_ops {
         state.update(|vec| vec.retain(|sig| &sig.id != id))
     }
 }
-
