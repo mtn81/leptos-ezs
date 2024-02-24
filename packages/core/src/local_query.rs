@@ -175,8 +175,18 @@ pub trait UseLocalQuery<Q: LocalQuery + ?Sized>:
     }
 }
 
-pub trait LocalQueryState<S> {
+pub trait LocalQueryState<Q: LocalQuery + ?Sized, S>: UseLocalQuery<Q> {
     fn state(&self) -> Signal<S>;
+
+    fn expect_state() -> (Signal<S>, Self) {
+        let _self = Self::expect();
+        (_self.state(), _self)
+    }
+    fn expect_state_with<T>(f: impl Fn(LocalQueryFetcher<Q>) -> T) -> (Signal<S>, Self) {
+        let _self = Self::expect();
+        f(_self.fetcher());
+        (_self.state(), _self)
+    }
 }
 
 pub trait EventSubsciber<E: Clone + 'static> {
