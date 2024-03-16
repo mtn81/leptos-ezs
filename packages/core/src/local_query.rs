@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use leptos::*;
 
@@ -5,7 +7,7 @@ use crate::{utils::*, EventAction};
 
 #[async_trait(?Send)]
 pub trait LocalQuery: 'static {
-    type Input: Clone + PartialEq + 'static;
+    type Input: Clone + Eq + std::hash::Hash + 'static;
     type Output: Clone + 'static;
     type Err: Clone + 'static;
     type Result = Result<Self::Output, Self::Err>;
@@ -48,14 +50,17 @@ impl<Q: LocalQuery + ?Sized> LocalQueryFetcher<Q> {
         self
     }
 
-    pub fn run(&self, input: impl Fn() -> Q::Input + 'static) -> LocalQueryResource<Q> {
+    pub fn run(&self, input: impl Fn() -> Q::Input + Clone + 'static) -> LocalQueryResource<Q> {
         let query = self.query;
         let on_ok = self.on_ok;
         let on_err = self.on_err;
-        let res = LocalQueryResource(create_local_resource(input, {
+        let res = LocalQueryResource(create_local_resource(input.clone(), {
             move |input| Self::fetch(query.get_value().0, on_ok, on_err, input)
         }));
-        self.query.get_value().1.set(Some(res.clone()));
+        self.query.get_value().1.update(move |map| {
+            map.insert(input(), res.clone());
+        });
+        // self.query.get_value().1.set(Some(res.clone()));
         res
     }
     pub fn run_with_memo(&self, input: Memo<Q::Input>) -> LocalQueryResource<Q> {
@@ -65,7 +70,10 @@ impl<Q: LocalQuery + ?Sized> LocalQueryFetcher<Q> {
         let res = LocalQueryResource(create_local_resource(input, {
             move |input| Self::fetch(query.get_value().0, on_ok, on_err, input)
         }));
-        self.query.get_value().1.set(Some(res.clone()));
+        self.query.get_value().1.update(move |map| {
+            map.insert(input(), res.clone());
+        });
+        // self.query.get_value().1.set(Some(res.clone()));
         res
     }
 
@@ -157,10 +165,10 @@ pub trait UseLocalQuery<Q: LocalQuery + ?Sized>:
         expect_context()
     }
 
-    fn expect_with<T>(f: impl Fn(LocalQueryFetcher<Q>) -> T) -> (Self, T) {
+    fn expect_with<T>(f: impl Fn(LocalQueryFetcher<Q>) -> T) -> (T, Self) {
         let _self = Self::expect();
         let res = f(_self.fetcher());
-        (_self, res)
+        (res, _self)
     }
 
     fn fetcher(&self) -> LocalQueryFetcher<Q> {
@@ -169,23 +177,23 @@ pub trait UseLocalQuery<Q: LocalQuery + ?Sized>:
         fetcher
     }
 
-    fn last_output(&self) -> Option<Q::Output> {
+    fn last_output(&self, input: Q::Input) -> Option<Q::Output> {
         let x = self.inner().1;
-        x.get().and_then(|r| r.value())
+        x.with(move |map| map.get(&input).and_then(|r| r.value()))
     }
 }
 
-pub trait LocalQueryState<Q: LocalQuery + ?Sized, S>: UseLocalQuery<Q> {
-    fn state(&self) -> Signal<S>;
+pub trait LocalQueryStateView<Q: LocalQuery + ?Sized, V>: UseLocalQuery<Q> {
+    fn state_view(&self) -> Signal<V>;
 
-    fn expect_state() -> (Signal<S>, Self) {
+    fn expect_state() -> (Signal<V>, Self) {
         let _self = Self::expect();
-        (_self.state(), _self)
+        (_self.state_view(), _self)
     }
-    fn expect_state_with<T>(f: impl Fn(LocalQueryFetcher<Q>) -> T) -> (Signal<S>, Self) {
+    fn expect_state_with<T>(f: impl Fn(LocalQueryFetcher<Q>) -> T) -> (Signal<V>, T, Self) {
         let _self = Self::expect();
-        f(_self.fetcher());
-        (_self.state(), _self)
+        let res = f(_self.fetcher());
+        (_self.state_view(), res, _self)
     }
 }
 
@@ -207,7 +215,7 @@ pub trait EventSubsciber<E: Clone + 'static> {
 // #[derive(Clone)]
 pub struct LocalQueryWrapper<Q: LocalQuery + ?Sized>(
     StoredValue<Shared<Q>>,
-    RwSignal<Option<LocalQueryResource<Q>>>,
+    RwSignal<HashMap<Q::Input, LocalQueryResource<Q>>>,
 );
 
 impl<Q: LocalQuery + ?Sized> Clone for LocalQueryWrapper<Q> {
@@ -219,7 +227,7 @@ impl<Q: LocalQuery + ?Sized> Copy for LocalQueryWrapper<Q> {}
 
 impl<Q: LocalQuery + ?Sized> LocalQueryWrapper<Q> {
     pub fn new(query: Shared<Q>) -> Self {
-        Self(store_value(query), create_rw_signal(None))
+        Self(store_value(query), create_rw_signal(HashMap::default()))
     }
     pub fn create_fetcher(&self) -> LocalQueryFetcher<Q> {
         LocalQueryFetcher::new(self.clone())

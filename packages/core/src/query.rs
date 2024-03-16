@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use leptos::*;
 use serde::de::DeserializeOwned;
@@ -7,7 +9,7 @@ use crate::utils::*;
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 pub trait Query: 'static {
-    type Input: Clone + PartialEq + 'static;
+    type Input: Clone + Eq + std::hash::Hash + 'static;
     type Output: Clone + serde::Serialize + DeserializeOwned + 'static;
     type Err: Clone + serde::Serialize + DeserializeOwned + 'static;
     type Result = Result<Self::Output, Self::Err>;
@@ -36,12 +38,15 @@ impl<Q: Query + ?Sized> QueryFetcher<Q> {
         }
     }
 
-    pub fn run(&self, input: impl Fn() -> Q::Input + 'static) -> QueryResource<Q> {
+    pub fn run(&self, input: impl Fn() -> Q::Input + Clone + 'static) -> QueryResource<Q> {
         let query = self.query;
-        let res = QueryResource(create_resource(input, {
+        let res = QueryResource(create_resource(input.clone(), {
             move |input| Self::fetch(query.get_value().0, input)
         }));
-        self.query.get_value().1.set(Some(res.clone()));
+        self.query.get_value().1.update(move |map| {
+            map.insert(input(), res.clone());
+        });
+        // self.query.get_value().1.set(Some(res.clone()));
         res
     }
     pub fn run_with_memo(&self, input: Memo<Q::Input>) -> QueryResource<Q> {
@@ -49,7 +54,10 @@ impl<Q: Query + ?Sized> QueryFetcher<Q> {
         let res = QueryResource(create_resource(input, {
             move |input| Self::fetch(query.get_value().0, input)
         }));
-        self.query.get_value().1.set(Some(res.clone()));
+        self.query.get_value().1.update(move |map| {
+            map.insert(input(), res.clone());
+        });
+        // self.query.get_value().1.set(Some(res.clone()));
         res
     }
 
@@ -111,16 +119,16 @@ pub trait UseQuery<Q: Query + ?Sized>: Clone + Copy + Sized + 'static {
         self.inner().create_fetcher()
     }
 
-    fn last_output(&self) -> Option<Q::Output> {
+    fn last_output(&self, input: Q::Input) -> Option<Q::Output> {
         let x = self.inner().1;
-        x.get().and_then(|r| r.value())
+        x.with(move |map| map.get(&input).and_then(|r| r.value()))
     }
 }
 
 // #[derive(Clone)]
 pub struct QueryWrapper<Q: Query + ?Sized>(
     StoredValue<Shared<Q>>,
-    RwSignal<Option<QueryResource<Q>>>,
+    RwSignal<HashMap<Q::Input, QueryResource<Q>>>,
 );
 
 impl<Q: Query + ?Sized> Clone for QueryWrapper<Q> {
@@ -132,12 +140,9 @@ impl<Q: Query + ?Sized> Copy for QueryWrapper<Q> {}
 
 impl<Q: Query + ?Sized> QueryWrapper<Q> {
     pub fn new(query: Shared<Q>) -> Self {
-        Self(store_value(query), create_rw_signal(None))
+        Self(store_value(query), create_rw_signal(HashMap::default()))
     }
     pub fn create_fetcher(&self) -> QueryFetcher<Q> {
         QueryFetcher::new(self.clone())
     }
 }
-
-
-

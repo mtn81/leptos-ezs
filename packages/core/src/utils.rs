@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use leptos::*;
 
 #[cfg(target_arch = "wasm32")]
@@ -78,24 +80,120 @@ pub mod vec_ops {
         id: &ID,
         data: &D,
     ) {
-        state.update(|vec| {
-            let mut x = vec![];
-            x.append(vec);
-            x.push(IdentifiedRwSignal::create(id, data));
-            *vec = x;
-            // vec.push(IdentifiedRwSignal::create(id, data))
-        });
+        state.update(|vec| append_(vec, id, data))
     }
+    pub fn append_<ID: PartialEq + Clone, D: Clone>(
+        vec: &mut VecRwSignals<ID, D>,
+        id: &ID,
+        data: &D,
+    ) {
+        vec.push(IdentifiedRwSignal::create(id, data));
+    }
+
     pub fn update<ID: PartialEq + Clone, D: Clone>(
         state: RwSignal<VecRwSignals<ID, D>>,
         id: &ID,
         data: &D,
-    ) {
-        if let Some(data_) = state.get_untracked().into_iter().find(|sig| &sig.id == id) {
+    ) -> bool {
+        let b = state.try_update(|vec| update_(vec, id, data));
+        b.unwrap_or(false)
+    }
+    pub fn update_<ID: PartialEq + Clone, D: Clone>(
+        vec: &mut VecRwSignals<ID, D>,
+        id: &ID,
+        data: &D,
+    ) -> bool {
+        if let Some(data_) = vec.into_iter().find(|sig| &sig.id == id) {
             data_.sig.set(data.clone());
+            true
+        } else {
+            false
         }
     }
+
+    pub fn save<ID: PartialEq + Clone, D: Clone>(
+        state: RwSignal<VecRwSignals<ID, D>>,
+        id: &ID,
+        data: &D,
+    ) {
+        state.update(|vec| save_(vec, id, data))
+    }
+    pub fn save_<ID: PartialEq + Clone, D: Clone>(
+        vec: &mut VecRwSignals<ID, D>,
+        id: &ID,
+        data: &D,
+    ) {
+        if !update_(vec, id, data) {
+            append_(vec, id, data)
+        }
+    }
+
     pub fn remove<ID: PartialEq + Clone, D: Clone>(state: RwSignal<VecRwSignals<ID, D>>, id: &ID) {
-        state.update(|vec| vec.retain(|sig| &sig.id != id))
+        state.update(|vec| remove_(vec, id))
+    }
+    pub fn remove_<ID: PartialEq + Clone, D: Clone>(vec: &mut VecRwSignals<ID, D>, id: &ID) {
+        vec.retain(|sig| &sig.id != id);
+    }
+}
+
+pub type HashMapRwSignals<ID, D> = HashMap<ID, RwSignal<D>>;
+pub type HashMapSignals<ID, D> = HashMap<ID, Signal<D>>;
+
+pub mod hashmap_ops {
+    use super::*;
+
+    pub fn to_read_only<ID: Eq + std::hash::Hash + Clone, D: Clone>(
+        s: RwSignal<HashMapRwSignals<ID, D>>,
+    ) -> Signal<HashMapSignals<ID, D>> {
+        Signal::derive(move || s.with(to_signals))
+    }
+
+    pub fn to_signals<ID: Eq + std::hash::Hash + Clone, D: Clone>(
+        rw_sigs: &HashMapRwSignals<ID, D>,
+    ) -> HashMapSignals<ID, D> {
+        rw_sigs
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone().into_signal()))
+            .collect()
+    }
+
+    pub fn insert<ID: Eq + std::hash::Hash + Clone, D: Clone>(
+        state: RwSignal<HashMapRwSignals<ID, D>>,
+        id: &ID,
+        data: &D,
+    ) {
+        state.update(|map| {
+            map.insert(id.clone(), create_rw_signal(data.clone()));
+        })
+    }
+
+    pub fn insert_option<ID: Eq + std::hash::Hash + Clone, D: Clone>(
+        state: RwSignal<HashMapRwSignals<ID, D>>,
+        kv: &Option<(ID, D)>,
+    ) {
+        state.update(|map| {
+            if let Some((id, data)) = kv {
+                map.insert(id.clone(), create_rw_signal(data.clone()));
+            }
+        })
+    }
+
+    pub fn signal_option_by_id<ID: Eq + std::hash::Hash + Clone, D: Clone, T>(
+        sigs: Signal<HashMapSignals<ID, D>>,
+        id: ID,
+        f: impl Fn(&D) -> T + 'static,
+    ) -> Signal<Option<T>> {
+        Signal::derive(move || sigs.with(|map| map.get(&id).map(|s| f(&s.get()))))
+    }
+    pub fn signal_by_id<ID: Eq + std::hash::Hash + Clone, D: Clone, T>(
+        sigs: Signal<HashMapSignals<ID, D>>,
+        id: ID,
+        f: impl Fn(&D) -> T + 'static,
+        default_f: impl FnOnce() -> T + Copy + 'static,
+    ) -> Signal<T> {
+        Signal::derive(move || {
+            sigs.with(|map| map.get(&id).map(|s| f(&s.get())))
+                .unwrap_or_else(default_f)
+        })
     }
 }
