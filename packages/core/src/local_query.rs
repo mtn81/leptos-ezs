@@ -18,8 +18,8 @@ pub trait LocalQuery: 'static {
 // #[derive(Clone)]
 pub struct LocalQueryFetcher<Q: LocalQuery + ?Sized> {
     query: StoredValue<LocalQueryWrapper<Q>>,
-    on_ok: StoredValue<Option<Shared<dyn Fn(Q::Output)>>>,
-    on_err: StoredValue<Option<Shared<dyn Fn(Q::Err)>>>,
+    on_ok: StoredValue<Option<Shared<dyn Fn(Q::Input, Q::Output)>>>,
+    on_err: StoredValue<Option<Shared<dyn Fn(Q::Input, Q::Err)>>>,
 }
 
 impl<Q: LocalQuery + ?Sized> Clone for LocalQueryFetcher<Q> {
@@ -41,11 +41,11 @@ impl<Q: LocalQuery + ?Sized> LocalQueryFetcher<Q> {
             on_err: store_value(None),
         }
     }
-    pub fn on_ok(&mut self, callback: impl Fn(Q::Output) + 'static) -> &mut Self {
+    pub fn on_ok(&mut self, callback: impl Fn(Q::Input, Q::Output) + 'static) -> &mut Self {
         self.on_ok = store_value(Some(Shared::new(callback)));
         self
     }
-    pub fn on_err(&mut self, callback: impl Fn(Q::Err) + 'static) -> &mut Self {
+    pub fn on_err(&mut self, callback: impl Fn(Q::Input, Q::Err) + 'static) -> &mut Self {
         self.on_err = store_value(Some(Shared::new(callback)));
         self
     }
@@ -79,22 +79,22 @@ impl<Q: LocalQuery + ?Sized> LocalQueryFetcher<Q> {
 
     async fn fetch(
         query: StoredValue<Shared<Q>>,
-        on_ok: StoredValue<Option<Shared<dyn Fn(Q::Output)>>>,
-        on_err: StoredValue<Option<Shared<dyn Fn(Q::Err)>>>,
+        on_ok: StoredValue<Option<Shared<dyn Fn(Q::Input, Q::Output)>>>,
+        on_err: StoredValue<Option<Shared<dyn Fn(Q::Input, Q::Err)>>>,
         input: Q::Input,
     ) -> Result<Q::Output, Q::Err> {
         logging::log!("Fetching local query");
         // TODO debounce, cache, retry handling
-        let result = query.get_value().exec(input).await;
+        let result = query.get_value().exec(input.clone()).await;
         match &result {
             Ok(value) => {
                 if let Some(f) = on_ok.get_value() {
-                    f(value.clone())
+                    f(input, value.clone())
                 }
             }
             Err(err) => {
                 if let Some(f) = on_err.get_value() {
-                    f(err.clone())
+                    f(input, err.clone())
                 }
             }
         }
