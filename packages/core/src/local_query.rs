@@ -167,11 +167,11 @@ pub trait UseLocalQuery<Q: LocalQuery + ?Sized>:
 
     fn expect_with<T>(f: impl Fn(LocalQueryFetcher<Q>) -> T) -> (T, Self) {
         let _self = Self::expect();
-        let res = f(_self.fetcher());
+        let res = f(_self.create_fetcher());
         (res, _self)
     }
 
-    fn fetcher(&self) -> LocalQueryFetcher<Q> {
+    fn create_fetcher(&self) -> LocalQueryFetcher<Q> {
         let mut fetcher = self.inner().create_fetcher();
         self.initialize_fetcher(&mut fetcher);
         fetcher
@@ -192,7 +192,7 @@ pub trait LocalQueryStateView<Q: LocalQuery + ?Sized, V>: UseLocalQuery<Q> {
     }
     fn expect_state_with<T>(f: impl Fn(LocalQueryFetcher<Q>) -> T) -> (Signal<V>, T, Self) {
         let _self = Self::expect();
-        let res = f(_self.fetcher());
+        let res = f(_self.create_fetcher());
         (_self.state_view(), res, _self)
     }
 }

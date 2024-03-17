@@ -1,13 +1,11 @@
 use heck::ToUpperCamelCase;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote, ToTokens};
-use regex::Regex;
 use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input,
     punctuated::Punctuated,
-    Attribute, Data, DeriveInput, Fields, GenericArgument, Ident, ImplItem, ItemImpl, ItemStruct,
-    Meta, Path, PathArguments, Token, Type, TypeParamBound,
+    Fields, GenericArgument, ItemImpl, ItemStruct, PathArguments, Token, Type,
 };
 
 /// Generate a Mutation trait & implementation for ['Mutation'].
@@ -426,4 +424,77 @@ pub fn async_trait_for_query(_attr: TokenStream, tokens: TokenStream) -> TokenSt
     };
 
     result.into()
+}
+
+/// Generate a use-query provide expression.
+///
+/// ```ignore
+/// provide_use_query!(HogeQuery);
+/// ```
+///
+/// Generated codes are like this.
+/// ```ignore
+/// UseHogeQuery::provide(HogeQueryProvider::di())
+/// ````
+#[proc_macro]
+pub fn provide_use_query(input: TokenStream) -> TokenStream {
+    let ProvideUseQueryInput { ident } = parse_macro_input!(input as ProvideUseQueryInput);
+    let use_query_ident = format_ident!("Use{}", &ident);
+    let provider_ident = format_ident!("{}Provider", &ident);
+
+    let result = quote! {
+        #use_query_ident::provide(#provider_ident::di())
+    };
+
+    result.into()
+}
+
+struct ProvideUseQueryInput {
+    ident: syn::Ident,
+}
+impl Parse for ProvideUseQueryInput {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let ident = input.parse()?;
+        Ok(ProvideUseQueryInput { ident })
+    }
+}
+
+/// Generate a use-mutation provide expression.
+///
+/// ```ignore
+/// provide_use_mutation!(UseHogeMutation, &[hoge_query.create_event_subscriber()]);
+/// ```
+///
+/// Generated codes are like this.
+/// ```ignore
+/// UseHogeMutation::provide(
+///     UseHogeMutationEnv::di(),
+///     &[hoge_query.create_event_subscriber()],
+/// );
+/// ````
+#[proc_macro]
+pub fn provide_use_mutation(input: TokenStream) -> TokenStream {
+    let ProvideUseMutationInput { ident, arg } =
+        parse_macro_input!(input as ProvideUseMutationInput);
+    let env_ident = format_ident!("{}Env", &ident);
+
+    let result = quote! {
+        #ident::provide(#env_ident::di(), #arg)
+    };
+
+    result.into()
+}
+
+struct ProvideUseMutationInput {
+    ident: syn::Ident,
+    arg: syn::Expr,
+}
+impl Parse for ProvideUseMutationInput {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let ident = input.parse()?;
+        let _comma: Token![,] = input.parse()?;
+        let arg = input.parse()?;
+        let _comma2: Option<Token![,]> = input.parse()?;
+        Ok(ProvideUseMutationInput { ident, arg })
+    }
 }

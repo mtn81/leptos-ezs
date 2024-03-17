@@ -109,13 +109,13 @@ pub trait UseQuery<Q: Query + ?Sized>: Clone + Copy + Sized + 'static {
 
     fn expect_with<T>(f: impl Fn(QueryFetcher<Q>) -> T) -> (T, Self) {
         let _self = Self::expect();
-        let res = f(_self.fetcher());
+        let res = f(_self.create_fetcher());
         (res, _self)
     }
 
     fn inner(&self) -> &QueryWrapper<Q>;
 
-    fn fetcher(&self) -> QueryFetcher<Q> {
+    fn create_fetcher(&self) -> QueryFetcher<Q> {
         self.inner().create_fetcher()
     }
 

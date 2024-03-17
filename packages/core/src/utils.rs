@@ -51,7 +51,7 @@ impl<ID: PartialEq + Clone, D: Clone> From<&IdentifiedRwSignal<ID, D>> for Ident
 pub type VecRwSignals<ID, D> = Vec<IdentifiedRwSignal<ID, D>>;
 pub type VecSignals<ID, D> = Vec<IdentifiedSignal<ID, D>>;
 
-pub mod vec_ops {
+pub mod vec_sig_ops {
     use super::*;
 
     pub fn create_rw_signals<ID: PartialEq + Clone, D: Clone>(
@@ -63,7 +63,7 @@ pub mod vec_ops {
             .collect()
     }
 
-    pub fn to_read_only<ID: PartialEq + Clone, D: Clone>(
+    pub fn read_only<ID: PartialEq + Clone, D: Clone>(
         s: RwSignal<VecRwSignals<ID, D>>,
     ) -> Signal<VecSignals<ID, D>> {
         Signal::derive(move || s.with(to_signals))
@@ -139,10 +139,10 @@ pub mod vec_ops {
 pub type HashMapRwSignals<ID, D> = HashMap<ID, RwSignal<D>>;
 pub type HashMapSignals<ID, D> = HashMap<ID, Signal<D>>;
 
-pub mod hashmap_ops {
+pub mod hashmap_sig_ops {
     use super::*;
 
-    pub fn to_read_only<ID: Eq + std::hash::Hash + Clone, D: Clone>(
+    pub fn read_only<ID: Eq + std::hash::Hash + Clone, D: Clone>(
         s: RwSignal<HashMapRwSignals<ID, D>>,
     ) -> Signal<HashMapSignals<ID, D>> {
         Signal::derive(move || s.with(to_signals))
@@ -178,22 +178,31 @@ pub mod hashmap_ops {
         })
     }
 
-    pub fn signal_option_by_id<ID: Eq + std::hash::Hash + Clone, D: Clone, T>(
+    pub fn get_by_id<ID: Eq + std::hash::Hash + Clone, D: Clone>(
         sigs: Signal<HashMapSignals<ID, D>>,
         id: ID,
-        f: impl Fn(&D) -> T + 'static,
-    ) -> Signal<Option<T>> {
-        Signal::derive(move || sigs.with(|map| map.get(&id).map(|s| f(&s.get()))))
+    ) -> Signal<Option<D>> {
+        extract_by_id(sigs, id, |d| d)
     }
-    pub fn signal_by_id<ID: Eq + std::hash::Hash + Clone, D: Clone, T>(
+
+    pub fn extract_by_id<ID: Eq + std::hash::Hash + Clone, D: Clone, T>(
         sigs: Signal<HashMapSignals<ID, D>>,
         id: ID,
-        f: impl Fn(&D) -> T + 'static,
-        default_f: impl FnOnce() -> T + Copy + 'static,
+        value_f: impl Fn(Option<D>) -> T + 'static,
     ) -> Signal<T> {
-        Signal::derive(move || {
-            sigs.with(|map| map.get(&id).map(|s| f(&s.get())))
-                .unwrap_or_else(default_f)
-        })
+        Signal::derive(move || sigs.with(|map| value_f(map.get(&id).map(|s| s.get()))))
     }
+
+    // pub fn extract_by_id<ID: Eq + std::hash::Hash + Clone, D: Clone, T>(
+    //     sigs: Signal<HashMapSignals<ID, D>>,
+    //     id: ID,
+    //     value_f: impl Fn(&D) -> T + 'static,
+    //     default_f: impl FnOnce() -> T + Copy + 'static,
+    // ) -> Signal<T> {
+    //     Signal::derive(move || {
+    //         sigs.with(|map| map.get(&id).map(|s| value_f(&s.get())))
+    //             .unwrap_or_else(default_f)
+    //     })
+    // }
 }
+
