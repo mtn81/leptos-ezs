@@ -119,6 +119,10 @@ pub trait UseQuery<Q: Query + ?Sized>: Clone + Copy + Sized + 'static {
         self.inner().create_fetcher()
     }
 
+    fn fetch<T>(&self, f: impl Fn(QueryFetcher<Q>) -> T) -> T {
+        f(self.create_fetcher())
+    }
+
     fn last_output(&self, input: Q::Input) -> Option<Q::Output> {
         let x = self.inner().1;
         x.with(move |map| map.get(&input).and_then(|r| r.value()))

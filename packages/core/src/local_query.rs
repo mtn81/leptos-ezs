@@ -177,6 +177,10 @@ pub trait UseLocalQuery<Q: LocalQuery + ?Sized>:
         fetcher
     }
 
+    fn fetch<T>(&self, f: impl Fn(LocalQueryFetcher<Q>) -> T) -> T {
+        f(self.create_fetcher())
+    }
+
     fn last_output(&self, input: Q::Input) -> Option<Q::Output> {
         let x = self.inner().1;
         x.with(move |map| map.get(&input).and_then(|r| r.value()))
