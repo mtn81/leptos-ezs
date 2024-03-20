@@ -94,9 +94,8 @@ pub mod vec_sig_ops {
         state: RwSignal<VecRwSignals<ID, D>>,
         id: &ID,
         data: &D,
-    ) -> bool {
-        let b = state.try_update(|vec| update_(vec, id, data));
-        b.unwrap_or(false)
+    ) {
+        state.try_update(|vec| update_(vec, id, data));
     }
     pub fn update_<ID: PartialEq + Clone, D: Clone>(
         vec: &mut VecRwSignals<ID, D>,
@@ -192,17 +191,5 @@ pub mod hashmap_sig_ops {
     ) -> Signal<T> {
         Signal::derive(move || sigs.with(|map| value_f(map.get(&id).map(|s| s.get()))))
     }
-
-    // pub fn extract_by_id<ID: Eq + std::hash::Hash + Clone, D: Clone, T>(
-    //     sigs: Signal<HashMapSignals<ID, D>>,
-    //     id: ID,
-    //     value_f: impl Fn(&D) -> T + 'static,
-    //     default_f: impl FnOnce() -> T + Copy + 'static,
-    // ) -> Signal<T> {
-    //     Signal::derive(move || {
-    //         sigs.with(|map| map.get(&id).map(|s| value_f(&s.get())))
-    //             .unwrap_or_else(default_f)
-    //     })
-    // }
 }
 

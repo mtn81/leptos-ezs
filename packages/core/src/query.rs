@@ -46,7 +46,6 @@ impl<Q: Query + ?Sized> QueryFetcher<Q> {
         self.query.get_value().1.update(move |map| {
             map.insert(input(), res.clone());
         });
-        // self.query.get_value().1.set(Some(res.clone()));
         res
     }
     pub fn run_with_memo(&self, input: Memo<Q::Input>) -> QueryResource<Q> {
@@ -57,7 +56,6 @@ impl<Q: Query + ?Sized> QueryFetcher<Q> {
         self.query.get_value().1.update(move |map| {
             map.insert(input(), res.clone());
         });
-        // self.query.get_value().1.set(Some(res.clone()));
         res
     }
 
